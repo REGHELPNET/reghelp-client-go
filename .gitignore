@@ -1,0 +1,24 @@
+# Binaries / build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+/bin/
+/dist/
+
+# Test + coverage
+*.test
+*.out
+coverage.*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local env overrides
+.env
+.env.*
+!.env.example
