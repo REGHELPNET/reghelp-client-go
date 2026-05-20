@@ -4,6 +4,40 @@ All notable changes to **reghelp-client-go** will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-05-20
+
+### Added
+
+- New skill **`attestation`** — WhatsApp Key Attestation cert chains via
+  `Client.GetAttestationToken` + `Client.GetAttestationStatus` +
+  `Client.PostAttestationFeedback`. Backward-compatible additive change.
+
+  ```go
+  task, err := c.GetAttestationToken(ctx, reghelp.AttestationTokenRequest{
+      AuthKey: challengeBase64,
+  })
+  if err != nil { return err }
+  result, err := c.WaitForResult(ctx, reghelp.ServiceAttestation, task.ID, 60*time.Second, 2*time.Second)
+  if err != nil { return err }
+  st := result.(*reghelp.AttestationStatusResponse)
+  certChainDERB64 := st.Authorization
+  leafKeyB64      := st.LeafPrivateKeyB64
+  keyboxID        := st.KeyboxDeviceID
+
+  // Report verdict so the keybox can be canary-quarantined on failure:
+  _, _ = c.PostAttestationFeedback(ctx, reghelp.AttestationFeedbackRequest{
+      TaskID: task.ID, OK: false, Reason: "downstream rejected",
+  })
+  ```
+
+- `AttestationStatusResponse`, `AttestationTokenRequest`,
+  `AttestationFeedbackRequest`, `ServiceAttestation`.
+
+### Changed
+
+- `Client.do()` is now a thin wrapper around `doMethod()` (internal).
+  POST endpoints reuse the same retry/error-mapping pipeline as GET.
+
 ## [1.0.0] - 2026-05-20
 
 First public release. Feature parity with Python SDK

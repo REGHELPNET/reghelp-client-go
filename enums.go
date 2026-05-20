@@ -71,10 +71,11 @@ const (
 type Service string
 
 const (
-	ServicePush      Service = "push"
-	ServiceEmail     Service = "email"
-	ServiceIntegrity Service = "integrity"
-	ServiceRecaptcha Service = "recaptcha"
-	ServiceTurnstile Service = "turnstile"
-	ServiceVoIP      Service = "voip"
+	ServicePush        Service = "push"
+	ServiceEmail       Service = "email"
+	ServiceIntegrity   Service = "integrity"
+	ServiceRecaptcha   Service = "recaptcha"
+	ServiceTurnstile   Service = "turnstile"
+	ServiceVoIP        Service = "voip"
+	ServiceAttestation Service = "attestation"
 )

@@ -137,6 +137,20 @@ func (c *Client) do(
 	taskID string,
 	allowErrorStatus bool,
 ) (map[string]any, error) {
+	return c.doMethod(ctx, http.MethodGet, endpoint, params, taskID, allowErrorStatus)
+}
+
+// doMethod is do() with an explicit HTTP method. POST endpoints still pass
+// arguments via the query string (matches FastAPI's behaviour when every
+// param is declared via Query(...)); the body stays empty.
+func (c *Client) doMethod(
+	ctx context.Context,
+	method string,
+	endpoint string,
+	params map[string]string,
+	taskID string,
+	allowErrorStatus bool,
+) (map[string]any, error) {
 	full, err := c.buildURL(endpoint, params)
 	if err != nil {
 		return nil, err
@@ -144,7 +158,7 @@ func (c *Client) do(
 
 	var lastErr error
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, full, nil)
+		req, err := http.NewRequestWithContext(ctx, method, full, nil)
 		if err != nil {
 			return nil, err
 		}

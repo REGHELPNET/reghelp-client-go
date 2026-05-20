@@ -62,6 +62,8 @@ func (c *Client) pollStatus(ctx context.Context, service Service, taskID string)
 		return c.GetTurnstileStatus(ctx, taskID)
 	case ServiceVoIP:
 		return c.GetVoIPStatus(ctx, taskID)
+	case ServiceAttestation:
+		return c.GetAttestationStatus(ctx, taskID)
 	default:
 		return nil, &Error{Code: "INVALID_PARAM", Message: "unknown service: " + string(service)}
 	}

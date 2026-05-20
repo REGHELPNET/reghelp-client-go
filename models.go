@@ -75,9 +75,25 @@ type TurnstileStatusResponse struct {
 	Token string `json:"token,omitempty"`
 }
 
+// AttestationStatusResponse is the attestation.getStatus result.
+//
+// On TaskStatusDone the full SignResponse payload is returned: an
+// X.509 certificate chain (base64-encoded DER concatenation), the
+// optional ECDSA signature over the request's enc field, the leaf
+// private key (PKCS#8 / base64), and the keybox device id used for
+// downstream /attestation/feedback canary reporting.
+type AttestationStatusResponse struct {
+	StatusResponse
+	Authorization     string `json:"authorization,omitempty"`
+	Sign              string `json:"sign,omitempty"`
+	LeafPrivateKeyB64 string `json:"leafPrivateKeyB64,omitempty"`
+	KeyboxDeviceID    string `json:"keyboxDeviceId,omitempty"`
+}
+
 // AnyStatus is the return type of WaitForResult — one of *PushStatusResponse,
 // *VoipStatusResponse, *EmailStatusResponse, *IntegrityStatusResponse,
-// *RecaptchaMobileStatusResponse, *TurnstileStatusResponse.
+// *RecaptchaMobileStatusResponse, *TurnstileStatusResponse,
+// *AttestationStatusResponse.
 type AnyStatus interface {
 	getStatus() TaskStatus
 }
@@ -88,3 +104,4 @@ func (s *EmailStatusResponse) getStatus() TaskStatus           { return s.Status
 func (s *IntegrityStatusResponse) getStatus() TaskStatus       { return s.Status }
 func (s *RecaptchaMobileStatusResponse) getStatus() TaskStatus { return s.Status }
 func (s *TurnstileStatusResponse) getStatus() TaskStatus       { return s.Status }
+func (s *AttestationStatusResponse) getStatus() TaskStatus     { return s.Status }
