@@ -9,9 +9,11 @@ import (
 // [Client.GetAttestationToken].
 //
 // AuthKey is the only mandatory field — every other knob has a sensible
-// default on the attestation-server side. The default flow targets
-// WhatsApp Key Attestation: com.whatsapp packageName, embedded WhatsApp
-// APK signature, current versionCode, zero verifiedBoot placeholder.
+// default on the attestation-server side. The flow is generic Android
+// Key Attestation: wraps a TEE-bound keybox from the server-side pool
+// and returns an X.509 chain with the KeyMint attestation extension
+// (OID 1.3.6.1.4.1.11129.2.1.17). Override package name, APK version
+// and signature to target any Google-issued challenge.
 type AttestationTokenRequest struct {
 	// AuthKey is the Google-issued challenge nonce.
 	// Hex or base64 (std/url-safe), 4..512 characters.
@@ -23,8 +25,8 @@ type AttestationTokenRequest struct {
 	VerifiedBootKey  string
 	VerifiedBootHash string
 
-	// Optional embedded APK metadata overrides. Leave zero/empty to use
-	// the attestation-server defaults (current WhatsApp build).
+	// Optional embedded APK metadata overrides. Leave zero/empty to
+	// use the attestation-server defaults.
 	APKVersionCode     int
 	PackageName        string
 	APKSignatureSha256 string
@@ -39,7 +41,7 @@ type AttestationTokenRequest struct {
 	Webhook string
 }
 
-// GetAttestationToken creates a WhatsApp Key Attestation task.
+// GetAttestationToken creates an Android Key Attestation task.
 //
 // The result is asynchronous: the returned TokenResponse carries the
 // task ID; poll GetAttestationStatus (or WaitForResult with
@@ -89,7 +91,7 @@ func (c *Client) GetAttestationToken(ctx context.Context, req AttestationTokenRe
 	return out, nil
 }
 
-// GetAttestationStatus polls a WhatsApp Key Attestation task.
+// GetAttestationStatus polls an Android Key Attestation task.
 func (c *Client) GetAttestationStatus(ctx context.Context, taskID string) (*AttestationStatusResponse, error) {
 	raw, err := c.do(ctx, "/attestation/getStatus", map[string]string{"id": taskID}, taskID, true)
 	if err != nil {

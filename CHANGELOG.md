@@ -4,6 +4,15 @@ All notable changes to **reghelp-client-go** will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-05-20
+
+### Changed
+
+- Docs: rebranded the attestation skill from "WhatsApp Key Attestation"
+  to "Android Key Attestation". The flow has always been generic across
+  any package — the WhatsApp framing in the docstring was misleading.
+  No code or wire-format changes; safe drop-in upgrade.
+
 ## [1.1.1] - 2026-05-20
 
 ### Removed
