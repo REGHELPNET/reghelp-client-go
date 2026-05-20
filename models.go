@@ -81,7 +81,7 @@ type TurnstileStatusResponse struct {
 // X.509 certificate chain (base64-encoded DER concatenation), the
 // optional ECDSA signature over the request's enc field, the leaf
 // private key (PKCS#8 / base64), and the keybox device id used for
-// downstream /attestation/feedback canary reporting.
+// debugging which keybox served the request.
 type AttestationStatusResponse struct {
 	StatusResponse
 	Authorization     string `json:"authorization,omitempty"`

@@ -2,7 +2,6 @@ package reghelp
 
 import (
 	"context"
-	"net/http"
 	"strconv"
 )
 
@@ -38,19 +37,6 @@ type AttestationTokenRequest struct {
 	Ref string
 	// Webhook is an optional URL to receive completion notifications.
 	Webhook string
-}
-
-// AttestationFeedbackRequest contains the parameters for
-// [Client.PostAttestationFeedback].
-//
-// Reporting failures is free of charge and helps the shared keybox pool
-// canary out a bad keybox before it burns through everyone else's quota.
-type AttestationFeedbackRequest struct {
-	TaskID     string
-	OK         bool
-	Reason     string
-	HTTPStatus int    // optional; 0 = omit (server picks 200 / 412)
-	Verdict    string // optional; ALL CAPS, e.g. "OK", "FAILED", "UNEVALUATED"
 }
 
 // GetAttestationToken creates a WhatsApp Key Attestation task.
@@ -116,32 +102,3 @@ func (c *Client) GetAttestationStatus(ctx context.Context, taskID string) (*Atte
 	return out, nil
 }
 
-// PostAttestationFeedback relays a downstream verdict to attestation-server
-// so the keybox that served this request can be canary-quarantined if the
-// cert chain failed verification.
-func (c *Client) PostAttestationFeedback(ctx context.Context, req AttestationFeedbackRequest) (map[string]any, error) {
-	if req.TaskID == "" {
-		return nil, &Error{Code: "INVALID_PARAM", Message: "TaskID is required"}
-	}
-	params := map[string]string{
-		"id": req.TaskID,
-		"ok": boolToString(req.OK),
-	}
-	if req.Reason != "" {
-		params["reason"] = req.Reason
-	}
-	if req.HTTPStatus != 0 {
-		params["httpStatus"] = strconv.Itoa(req.HTTPStatus)
-	}
-	if req.Verdict != "" {
-		params["verdict"] = req.Verdict
-	}
-	return c.doMethod(ctx, http.MethodPost, "/attestation/feedback", params, req.TaskID, true)
-}
-
-func boolToString(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
-}
