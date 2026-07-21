@@ -33,6 +33,7 @@ Official Go client for the **REGHelp Key API**. Automate APNS / FCM push tokens,
 - **Push Token API** — APNS, FCM, Telegram iOS / Android / TG-X / TG-Beta push tokens, VoIP push tokens.
 - **CAPTCHA API** — Cloudflare Turnstile, reCAPTCHA Mobile, status polling, configurable proxy per request.
 - **Device Attestation** — Google Play Integrity Classic (MEETS_STRONG_INTEGRITY) and Standard / Express (MEETS_DEVICE_INTEGRITY) flows.
+- **Provider registrar (WhatsApp / Snapchat)** — bind a server-owned Android profile to a client registrar session, then create Play Integrity + Key Attestation on that *same* pinned device: `StartRegistrar`, `GetRegistrarBinding`, `GetProviderAppParams`, `GetBoundIntegrityToken` / `GetBoundIntegrityStatus`, `GetBoundAttestationToken` / `GetBoundAttestationStatus`. Pass `RequestID` for idempotent task creation (sent as `Idempotency-Key`).
 - **Email API** — iCloud Hide My Email, Gmail OAuth, verification code polling.
 - **Idiomatic Go** — `context.Context` first arg, typed errors via `errors.Is` / `errors.As`, no global state, safe for concurrent use.
 - **Zero deps** — only `net/http`, `encoding/json` and friends. Drop into any Go project without dependency surface.

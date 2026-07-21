@@ -96,7 +96,7 @@ func New(apiKey string, opts ...Option) *Client {
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		maxRetries: 3,
 		retryDelay: time.Second,
-		userAgent:  "reghelp-client-go/1.0.0",
+		userAgent:  "reghelp-client-go/1.2.0",
 	}
 	for _, o := range opts {
 		o(c)
@@ -137,7 +137,20 @@ func (c *Client) do(
 	taskID string,
 	allowErrorStatus bool,
 ) (map[string]any, error) {
-	return c.doMethod(ctx, http.MethodGet, endpoint, params, taskID, allowErrorStatus)
+	return c.doMethod(ctx, http.MethodGet, endpoint, params, nil, taskID, allowErrorStatus)
+}
+
+// doH is do() with optional per-request headers (e.g. Idempotency-Key for paid
+// registrar task creation). Headers are re-sent verbatim on every retry so an
+// idempotent request keeps its key on a 429/timeout/network re-send.
+func (c *Client) doH(
+	ctx context.Context,
+	endpoint string,
+	params, headers map[string]string,
+	taskID string,
+	allowErrorStatus bool,
+) (map[string]any, error) {
+	return c.doMethod(ctx, http.MethodGet, endpoint, params, headers, taskID, allowErrorStatus)
 }
 
 // doMethod is do() with an explicit HTTP method. POST endpoints still pass
@@ -148,6 +161,7 @@ func (c *Client) doMethod(
 	method string,
 	endpoint string,
 	params map[string]string,
+	headers map[string]string,
 	taskID string,
 	allowErrorStatus bool,
 ) (map[string]any, error) {
@@ -164,6 +178,11 @@ func (c *Client) doMethod(
 		}
 		req.Header.Set("User-Agent", c.userAgent)
 		req.Header.Set("Accept", "application/json")
+		for k, v := range headers {
+			if v != "" {
+				req.Header.Set(k, v)
+			}
+		}
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
