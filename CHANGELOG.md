@@ -4,6 +4,22 @@ All notable changes to **reghelp-client-go** will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-09-10
+
+### Added
+
+- `Client.GetEmailStock(ctx, appName, emailType)` for `GET /email/getStock`.
+- `EmailStockResponse` with canonical app code, nonnegative count and UTC
+  observation time. Reading stock creates no task, reservation or charge.
+- English/Russian README examples and versioned upgrade instructions.
+
+### Fixed
+
+- Recognize `UPSTREAM_ERROR` with `errors.Is(err, ErrExternalService)`, preserving
+  the original error code and compatibility with `EXTERNAL_ERROR`.
+- Reject incomplete or invalid stock responses instead of reporting a false zero.
+- Updated the default User-Agent to `reghelp-client-go/1.3.0`.
+
 ## [1.1.2] - 2026-05-20
 
 ### Changed

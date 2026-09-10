@@ -4,6 +4,12 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/REGHELPNET/reghelp-client-go)](https://goreportcard.com/report/github.com/REGHELPNET/reghelp-client-go)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+Current release / Текущий релиз: **v1.3.0**.
+
+```bash
+go get github.com/REGHELPNET/reghelp-client-go@v1.3.0
+```
+
 Official Go client for the **REGHelp Key API**. Automate APNS / FCM push tokens, Google Play Integrity attestation, Cloudflare Turnstile, reCAPTCHA Mobile, iCloud Hide My Email and Gmail OAuth flows from idiomatic Go — context-first, typed errors, zero dependencies (stdlib only), production-tested. Drop-in companion to the Python SDK [`reghelp_client`](https://github.com/REGHELPNET/reghelp_client) for teams that need an `async`/`await`-style Go API for QA automation, mobile attestation, Telegram bot registration and backend integration tests.
 
 > Russian version below / Русская версия ниже.
@@ -149,6 +155,27 @@ st, _ := cli.GetVoIPStatus(ctx, voip.ID)
 ```
 
 #### 📧 Email (iCloud HME, Gmail OAuth)
+
+Read inventory before allocating an address:
+
+```go
+stock, err := cli.GetEmailStock(ctx, "tg", reghelp.EmailTypeICloud)
+if err != nil {
+    return err
+}
+fmt.Println(stock.AppName, stock.Count, stock.UpdatedAt)
+```
+
+Application codes: Telegram `tg`, Instagram `ig`, WhatsApp `wa`, or another
+configured application. Supported aliases are resolved by the API; `AppName`
+is the canonical code. `EmailStockResponse` includes `Service`, `AppName`,
+`Count` (`int64`), `UpdatedAt` (`time.Time`, UTC) and `Status`.
+This authenticated `GET /email/getStock` call is free and does not create a
+task or reserve an address. Stock refreshes about every 30 seconds, with a
+10-second API cache; the snapshot does not guarantee subsequent allocation.
+Zero is a valid count. Disabled services (currently Gmail) return
+`ErrServiceDisabled`; unavailable or stale inventory returns
+`ErrExternalService` (`UPSTREAM_ERROR`). Use `errors.Is` to check these errors.
 
 ```go
 em, _ := cli.GetEmail(ctx, reghelp.EmailRequest{
@@ -351,12 +378,21 @@ func main() {
 | `await client.get_push_token(...)` | `cli.GetPushToken(ctx, req)` |
 | `await client.get_voip_token(...)` | `cli.GetVoIPToken(ctx, req)` |
 | `await client.get_email(...)` | `cli.GetEmail(ctx, req)` |
+| `await client.get_email_stock("tg", EmailType.ICLOUD)` | `cli.GetEmailStock(ctx, "tg", reghelp.EmailTypeICloud)` |
 | `await client.get_integrity_token(...)` | `cli.GetIntegrityToken(ctx, req)` |
 | `await client.get_recaptcha_mobile_token(...)` | `cli.GetRecaptchaMobileToken(ctx, req)` |
 | `await client.get_turnstile_token(...)` | `cli.GetTurnstileToken(ctx, req)` |
 | `await client.wait_for_result(id, service, ...)` | `cli.WaitForResult(ctx, id, service, ...)` |
 
 ### 🚨 Обработка ошибок
+
+С версии **v1.3.0** `GetEmailStock` возвращает количество доступных адресов
+по приложению: `tg` — Telegram, `ig` — Instagram, `wa` — WhatsApp. Поля ответа:
+`Service`, `AppName`, `Count`, `UpdatedAt`, `Status`. Запрос бесплатный, без
+создания задачи и резервирования адреса. `Count=0` — корректный остаток;
+отключённый Gmail возвращает `ErrServiceDisabled`, недоступные или устаревшие
+данные — `ErrExternalService`. `UpdatedAt` — время наблюдения в UTC;
+обновление примерно раз в 30 секунд, кеш API — 10 секунд. Остаток не гарантирует выдачу.
 
 ```go
 _, err := cli.GetBalance(ctx)

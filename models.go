@@ -1,5 +1,16 @@
 package reghelp
 
+import "time"
+
+// EmailStockResponse is an inventory observation, without address reservation or charge.
+type EmailStockResponse struct {
+	Status    string    `json:"status"`
+	Service   EmailType `json:"service"`
+	AppName   string    `json:"appName"`   // canonical application code
+	Count     int64     `json:"count"`     // zero is a valid available count
+	UpdatedAt time.Time `json:"updatedAt"` // UTC inventory observation timestamp
+}
+
 // BalanceResponse is the result of GetBalance.
 type BalanceResponse struct {
 	Status   string  `json:"status"`

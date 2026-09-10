@@ -66,7 +66,7 @@ func (e *Error) Is(target error) bool {
 	case ErrInvalidParameter:
 		return e.Status == 400 || e.Code == "INVALID_PARAM"
 	case ErrExternalService:
-		return e.Status == 502 || e.Code == "EXTERNAL_ERROR"
+		return e.Status == 502 || e.Code == "EXTERNAL_ERROR" || e.Code == "UPSTREAM_ERROR"
 	}
 	return false
 }
@@ -91,7 +91,7 @@ func mapErrorCode(status int, code, message, task string, raw map[string]any) *E
 			}
 		case "INVALID_PARAM":
 			e.Message = "invalid parameter"
-		case "EXTERNAL_ERROR":
+		case "EXTERNAL_ERROR", "UPSTREAM_ERROR":
 			e.Message = "external service error"
 		case "UNAUTHORIZED":
 			e.Message = "invalid api key"

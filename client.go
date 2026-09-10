@@ -96,7 +96,7 @@ func New(apiKey string, opts ...Option) *Client {
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		maxRetries: 3,
 		retryDelay: time.Second,
-		userAgent:  "reghelp-client-go/1.2.0",
+		userAgent:  "reghelp-client-go/1.3.0",
 	}
 	for _, o := range opts {
 		o(c)
