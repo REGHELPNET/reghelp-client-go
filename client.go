@@ -9,6 +9,8 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -205,6 +207,37 @@ func (c *Client) doMethod(
 			return nil, lastErr
 		}
 
+		// HTTP 503 on a read-only getStatus poll is temporary (the task store
+		// could not be read, or a proxy answered instead of the API): repeat
+		// it. A disabled service or maintenance mode is deliberate and falls
+		// through to the normal mapping below.
+		if resp.StatusCode == http.StatusServiceUnavailable && isStatusPoll(method, endpoint) {
+			var envelope map[string]any
+			_ = json.Unmarshal(body, &envelope) // body may be plain text from a proxy
+			code := firstNonEmpty(asString(envelope["id"]), asString(envelope["detail"]))
+			if code != "SERVICE_DISABLED" && code != "MAINTENANCE_MODE" {
+				unavailable := mapErrorCode(resp.StatusCode, code, asString(envelope["message"]), taskID, envelope)
+				if unavailable.Code == "" {
+					unavailable.Message = "service temporarily unavailable"
+				}
+				hint, hinted := retryAfter(resp.Header.Get("Retry-After"))
+				unavailable.RetryAfter = hint
+				unavailable.repeatable = true
+				lastErr = unavailable
+				if attempt < c.maxRetries && ctx.Err() == nil {
+					pause := c.backoffDelay(attempt)
+					if hinted {
+						pause = hint
+					}
+					if err := sleepCtx(ctx, pause); err != nil {
+						return nil, err
+					}
+					continue
+				}
+				return nil, lastErr
+			}
+		}
+
 		var decoded map[string]any
 		if len(body) > 0 {
 			if err := json.Unmarshal(body, &decoded); err != nil {
@@ -230,11 +263,57 @@ func (c *Client) doMethod(
 	return nil, &Error{Code: "UNKNOWN", Message: "exhausted retries"}
 }
 
-// backoff sleeps `retryDelay * 2^attempt` with small jitter, honoring ctx.
+// backoff sleeps `retryDelay * 2^attempt` with small jitter.
 func (c *Client) backoff(attempt int) {
+	time.Sleep(c.backoffDelay(attempt))
+}
+
+// backoffDelay is the pause backoff() sleeps for.
+func (c *Client) backoffDelay(attempt int) time.Duration {
 	d := c.retryDelay * (1 << attempt)
 	jitter := time.Duration(rand.Int63n(int64(c.retryDelay)))
-	time.Sleep(d + jitter)
+	return d + jitter
+}
+
+// maxRetryAfter caps a server-sent Retry-After hint.
+const maxRetryAfter = 30 * time.Second
+
+// retryAfter parses a Retry-After header given in whole seconds. The HTTP-date
+// form and malformed values are ignored (ok=false).
+func retryAfter(raw string) (d time.Duration, ok bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, false
+	}
+	secs, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || secs < 0 {
+		return 0, false
+	}
+	if secs > int64(maxRetryAfter/time.Second) {
+		return maxRetryAfter, true
+	}
+	return time.Duration(secs) * time.Second, true
+}
+
+// isStatusPoll reports whether the request is a read-only `.../getStatus`
+// call, which is safe to repeat.
+func isStatusPoll(method, endpoint string) bool {
+	return method == http.MethodGet && strings.HasSuffix(strings.TrimRight(endpoint, "/"), "/getStatus")
+}
+
+// sleepCtx waits for d or until ctx is done, whichever comes first.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return ctx.Err()
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }
 
 func (c *Client) buildURL(endpoint string, params map[string]string) (string, error) {

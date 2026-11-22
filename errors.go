@@ -3,6 +3,7 @@ package reghelp
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Error is the base error type returned by the SDK.
@@ -20,6 +21,11 @@ type Error struct {
 	Raw     map[string]any
 	// Unwrapped underlying error, if any (e.g. network/timeout).
 	Cause error
+	// RetryAfter is the server's Retry-After hint on a temporary HTTP 503
+	// (zero when the header was absent or not given in seconds).
+	RetryAfter time.Duration
+	// repeatable is set only for a temporary 503 on a read-only status poll.
+	repeatable bool
 }
 
 func (e *Error) Error() string {
@@ -49,6 +55,13 @@ var (
 	ErrInvalidJSONResult = errors.New("reghelp: invalid JSON in response")
 )
 
+// ErrUnavailable marks a temporary HTTP 503 on a read-only status poll
+// (Get*Status / WaitForResult): the status could not be read and the same
+// request can be repeated. A disabled service, maintenance mode, and a 503 on
+// any other request (where a repeat is not known to be safe) are not
+// ErrUnavailable.
+var ErrUnavailable = errors.New("reghelp: service temporarily unavailable")
+
 // Is reports whether err equals one of the sentinel errors above.
 // Implements errors.Is for chained Error values.
 func (e *Error) Is(target error) bool {
@@ -65,6 +78,8 @@ func (e *Error) Is(target error) bool {
 		return e.Status == 404 || e.Code == "TASK_NOT_FOUND"
 	case ErrInvalidParameter:
 		return e.Status == 400 || e.Code == "INVALID_PARAM"
+	case ErrUnavailable:
+		return e.Status == 503 && e.repeatable
 	case ErrExternalService:
 		return e.Status == 502 || e.Code == "EXTERNAL_ERROR" || e.Code == "UPSTREAM_ERROR"
 	}

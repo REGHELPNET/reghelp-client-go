@@ -2,6 +2,8 @@ package reghelp
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 )
 
@@ -12,7 +14,11 @@ import (
 // pollInterval 0 → 2s (matches Python SDK default).
 //
 // Returns the concrete *XxxStatusResponse (use AnyStatus for the interface
-// boundary). On timeout returns ErrTimeout; on ctx cancel returns ctx.Err().
+// boundary). On timeout returns an error matching ErrTimeout (use errors.Is);
+// on ctx cancel returns ctx.Err().
+//
+// A temporary HTTP 503 from the status endpoint (errors.Is(err, ErrUnavailable))
+// does not end the wait: polling continues until the deadline.
 func (c *Client) WaitForResult(
 	ctx context.Context,
 	taskID string,
@@ -28,22 +34,52 @@ func (c *Client) WaitForResult(
 	}
 
 	deadline := time.Now().Add(timeout)
+	// One poll may itself repeat a 503 and wait for Retry-After, so every poll
+	// runs under the wait deadline, not only under the caller's ctx.
+	pollCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	var lastUnavailable error
+	timedOut := func() error {
+		if lastUnavailable != nil {
+			return fmt.Errorf("%w (last status read: %v)", ErrTimeout, lastUnavailable)
+		}
+		return ErrTimeout
+	}
 
 	for {
-		st, err := c.pollStatus(ctx, service, taskID)
-		if err != nil {
+		pause := pollInterval
+		st, err := c.pollStatus(pollCtx, service, taskID)
+		switch {
+		case err == nil:
+			if st.getStatus().IsTerminal() {
+				return st, nil
+			}
+			lastUnavailable = nil
+		case ctx.Err() == nil && pollCtx.Err() != nil:
+			// Our own deadline cut the poll short, not the caller's ctx.
+			return nil, timedOut()
+		case errors.Is(err, ErrUnavailable) && ctx.Err() == nil:
+			// The status read failed, the task did not: keep polling until
+			// the caller's own deadline instead of giving the task up.
+			var apiErr *Error
+			if errors.As(err, &apiErr) && apiErr.RetryAfter > pause {
+				pause = apiErr.RetryAfter
+			}
+			lastUnavailable = err
+		default:
 			return nil, err
 		}
-		if st.getStatus().IsTerminal() {
-			return st, nil
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, timedOut()
 		}
-		if time.Until(deadline) <= 0 {
-			return nil, ErrTimeout
+		if pause > remaining {
+			pause = remaining
 		}
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(pollInterval):
+		case <-time.After(pause):
 		}
 	}
 }

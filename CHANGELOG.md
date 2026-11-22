@@ -4,6 +4,26 @@ All notable changes to **reghelp-client-go** will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- `Get*Status` calls repeat the request on a temporary HTTP 503 (up to
+  `WithMaxRetries`, waiting for the server's `Retry-After` when sent, capped at
+  30 s). A disabled service and maintenance mode are not repeated; requests
+  other than `getStatus` are not repeated on 503.
+- `WaitForResult` no longer gives the task up on a temporary 503: it keeps
+  polling until its own deadline. A single poll, including its retries, is cut
+  off at that deadline. A timeout that follows a 503 wraps `ErrTimeout` with
+  the last status-read error: match it with `errors.Is`.
+
+### Added
+
+- `ErrUnavailable` sentinel and `Error.RetryAfter` for a temporary HTTP 503 on
+  a status poll. Such an error still matches `ErrExternalService` when the
+  server sends `EXTERNAL_ERROR`. A 503 on a task-creating request is not
+  `ErrUnavailable`: it does not prove the task was not created.
+
 ## [1.3.0] - 2026-09-10
 
 ### Added
