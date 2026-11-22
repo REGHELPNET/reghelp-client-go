@@ -4,7 +4,7 @@ All notable changes to **reghelp-client-go** will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.4.0] - 2026-11-22
 
 ### Changed
 
@@ -23,6 +23,7 @@ the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
   a status poll. Such an error still matches `ErrExternalService` when the
   server sends `EXTERNAL_ERROR`. A 503 on a task-creating request is not
   `ErrUnavailable`: it does not prove the task was not created.
+- Updated the default User-Agent to `reghelp-client-go/1.4.0`.
 
 ## [1.3.0] - 2026-09-10
 

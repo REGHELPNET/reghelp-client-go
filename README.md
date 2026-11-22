@@ -4,10 +4,10 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/REGHELPNET/reghelp-client-go)](https://goreportcard.com/report/github.com/REGHELPNET/reghelp-client-go)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Current release / Текущий релиз: **v1.3.0**.
+Current release / Текущий релиз: **v1.4.0**.
 
 ```bash
-go get github.com/REGHELPNET/reghelp-client-go@v1.3.0
+go get github.com/REGHELPNET/reghelp-client-go@v1.4.0
 ```
 
 Official Go client for the **REGHelp Key API**. Automate APNS / FCM push tokens, Google Play Integrity attestation, Cloudflare Turnstile, reCAPTCHA Mobile, iCloud Hide My Email and Gmail OAuth flows from idiomatic Go — context-first, typed errors, zero dependencies (stdlib only), production-tested. Drop-in companion to the Python SDK [`reghelp_client`](https://github.com/REGHELPNET/reghelp_client) for teams that need an `async`/`await`-style Go API for QA automation, mobile attestation, Telegram bot registration and backend integration tests.
@@ -43,7 +43,7 @@ Official Go client for the **REGHelp Key API**. Automate APNS / FCM push tokens,
 - **Email API** — iCloud Hide My Email, Gmail OAuth, verification code polling.
 - **Idiomatic Go** — `context.Context` first arg, typed errors via `errors.Is` / `errors.As`, no global state, safe for concurrent use.
 - **Zero deps** — only `net/http`, `encoding/json` and friends. Drop into any Go project without dependency surface.
-- **Retry & backoff** — automatic retry on HTTP 429 and network errors with exponential backoff + jitter.
+- **Retry & backoff** — automatic retry on HTTP 429 and network errors with exponential backoff + jitter; status polls also survive a temporary HTTP 503 and honour `Retry-After`.
 - **Webhook support** — pass a callback URL when creating any task to skip polling.
 
 Built for backend engineers, mobile QA automation teams and Telegram bot developers who need a typed Go SDK for REGHelp services.
@@ -251,6 +251,14 @@ status, err := cli.WaitForResult(ctx, task.ID,
 
 Returns when the task reaches a terminal state (`done` / `error`), the deadline elapses (`reghelp.ErrTimeout`) or `ctx` is cancelled.
 
+Since **v1.4.0** a temporary HTTP 503 from the status endpoint does not end the
+wait. The API answers 503 with `Retry-After` when it cannot read the task store
+for a few seconds; the task itself keeps running, so `WaitForResult` keeps
+polling until its deadline. A single poll, including its retries, never
+outlives that deadline. If the wait times out during a 503 window, the returned
+error wraps `ErrTimeout` together with the last status-read error — match it
+with `errors.Is(err, reghelp.ErrTimeout)`, not with `==`.
+
 #### 🪝 Webhooks
 
 Pass a `Webhook` URL on any `Get…Token` / `GetEmail` call to receive a POST when the task completes, instead of polling.
@@ -270,6 +278,9 @@ case errors.Is(err, reghelp.ErrTaskNotFound):
     // task ID mismatch
 case errors.Is(err, reghelp.ErrTimeout):
     // WaitForResult deadline
+case errors.Is(err, reghelp.ErrUnavailable):
+    // Get*Status only: the status could not be read, the task is not lost.
+    // Ask again later; apiErr.RetryAfter holds the server's hint.
 case err != nil:
     var apiErr *reghelp.Error
     if errors.As(err, &apiErr) {
@@ -289,9 +300,24 @@ Sentinel errors:
 | `ErrTaskNotFound` | HTTP 404 / `id=TASK_NOT_FOUND` |
 | `ErrInvalidParameter` | HTTP 400 / `id=INVALID_PARAM` |
 | `ErrExternalService` | HTTP 502 / `id=EXTERNAL_ERROR` |
+| `ErrUnavailable` | temporary HTTP 503 on a `Get*Status` call, after all retries |
 | `ErrTimeout` | `WaitForResult` deadline reached |
 | `ErrNetwork` | transport-level failure |
 | `ErrInvalidJSONResult` | non-JSON response body |
+
+#### Temporary HTTP 503 on status polls
+
+`Get*Status` calls repeat the request on a temporary HTTP 503 up to
+`WithMaxRetries` times. The pause is the server's `Retry-After` (capped at
+30 s); without the header the usual exponential back-off applies, and the pause
+stops as soon as `ctx` is done. When the status is still unavailable, the call
+returns an `*Error` that matches `ErrUnavailable` and carries `RetryAfter`. It
+also matches `ErrExternalService` when the server sends `EXTERNAL_ERROR`, so
+check `ErrUnavailable` first if you tell the two apart.
+
+Not repeated on 503: `ErrServiceDisabled`, `ErrMaintenance` and every
+task-creating call (`Get…Token`, `GetEmail`). For those a 503 does not prove
+the task was not created, and the error is not `ErrUnavailable`.
 
 ### ⚙️ Configuration
 
@@ -326,7 +352,7 @@ REGHELP_API_KEY=your_key go run ./examples/basic
 - Email: iCloud Hide My Email и Gmail OAuth с автоматическим ожиданием кода.
 - Идиоматический Go: `context.Context`-first, типизированные ошибки через `errors.Is` / `errors.As`, безопасность для конкурентного использования.
 - Нулевые зависимости: только стандартная библиотека Go (`net/http`, `encoding/json` …).
-- Автоматический ретрай на HTTP 429 и сетевых ошибках с экспоненциальной задержкой и джиттером.
+- Автоматический ретрай на HTTP 429 и сетевых ошибках с экспоненциальной задержкой и джиттером; опрос статуса переживает временный HTTP 503 и учитывает `Retry-After`.
 - Поддержка webhook вместо polling — указать `Webhook: "https://…"` в любом `Get…Token` запросе.
 
 ### 📦 Установка
@@ -399,6 +425,25 @@ _, err := cli.GetBalance(ctx)
 if errors.Is(err, reghelp.ErrUnauthorized) { /* неверный API-ключ */ }
 if errors.Is(err, reghelp.ErrRateLimit)    { /* лимит, ретрай позже */ }
 ```
+
+С версии **v1.4.0** опрос статуса переживает временный HTTP 503. API отвечает
+503 с заголовком `Retry-After`, когда несколько секунд не может прочитать
+хранилище задач; сама задача продолжает выполняться. `Get*Status` повторяет
+запрос до `WithMaxRetries` раз и ждёт столько, сколько указал сервер (не больше
+30 секунд), а `WaitForResult` продолжает опрос до своего срока. Если статус так
+и не прочитан, ошибка совпадает с `ErrUnavailable` и несёт `RetryAfter`:
+
+```go
+st, err := cli.GetPushStatus(ctx, taskID)
+if errors.Is(err, reghelp.ErrUnavailable) {
+    // статус временно не прочитать, задача не потеряна — спросить позже
+}
+```
+
+Не повторяются при 503: отключённый сервис, режим обслуживания и запросы,
+создающие задачу (`Get…Token`, `GetEmail`) — для них 503 не доказывает, что
+задача не создана. Таймаут `WaitForResult` после 503 оборачивает `ErrTimeout`:
+сравнивайте через `errors.Is`, а не `==`.
 
 Полный список sentinel-ошибок — таблица в [English-разделе](#-error-handling).
 
